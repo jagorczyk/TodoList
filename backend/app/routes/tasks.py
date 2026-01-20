@@ -62,3 +62,31 @@ def delete_task(id):
     db.session.commit()
     
     return jsonify({"msg": "Zadanie usunięte"}), 200
+
+@tasks_bp.route('/<int:id>', methods=['PATCH'])
+@jwt_required()
+def update_task(id):
+    current_user_id = int(get_jwt_identity())
+    task = Task.query.filter_by(id=id, user_id=current_user_id).first()
+    
+    if not task:
+        return jsonify({"msg": "Zadanie nie znalezione"}), 404
+        
+    data = request.get_json()
+    
+    # Aktualizacja statusu "wykonane"
+    if 'is_completed' in data:
+        task.is_completed = data['is_completed']
+
+    # Opcjonalnie: Aktualizacja tytułu (jeśli też chcesz pozwolić na edycję tekstu)
+    if 'title' in data:
+        task.title = data['title']
+        
+    db.session.commit()
+    
+    return jsonify({
+        "msg": "Zadanie zaktualizowane", 
+        "id": task.id,
+        "is_completed": task.is_completed,
+        "title": task.title
+    }), 200

@@ -57,6 +57,34 @@ export default function TasksPage() {
     }
   };
 
+  // --- NOWA FUNKCJA DO ZMIANY STATUSU ---
+  const toggleTaskCompletion = async (id: number, currentStatus: boolean) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    // Aktualizujemy stan lokalnie "optymistycznie" (natychmiastowa reakcja interfejsu)
+    setTasks(current => 
+      current.map(t => t.id === id ? { ...t, is_completed: !currentStatus } : t)
+    );
+
+    try {
+      await fetch(`/api/tasks/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          is_completed: !currentStatus 
+        })
+      });
+    } catch (err) {
+      console.error("Błąd aktualizacji zadania:", err);
+      // W razie błędu można tu cofnąć zmianę, ale dla uproszczenia pomijamy to
+    }
+  };
+  // --------------------------------------
+
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
@@ -139,12 +167,26 @@ export default function TasksPage() {
             ) : (
               tasksForSelectedDate.map(task => (
                 <div key={task.id} className="group flex items-center justify-between p-3 bg-gray-50 hover:bg-white border border-transparent hover:border-blue-100 rounded-lg transition-all shadow-sm hover:shadow-md">
-                  <div className="flex flex-col">
-                    <span className="font-medium text-gray-800">{task.title}</span>
-                    <span className="text-xs text-blue-500 font-mono">
-                      {task.due_date && format(parseISO(task.due_date), 'HH:mm')}
-                    </span>
+                  
+                  {/* ZMIANA: Dodano checkbox i obsługę zmiany statusu */}
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="checkbox" 
+                      checked={task.is_completed}
+                      onChange={() => toggleTaskCompletion(task.id, task.is_completed)}
+                      className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300 cursor-pointer"
+                    />
+                    <div className="flex flex-col">
+                      <span className={`font-medium transition-colors ${task.is_completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                        {task.title}
+                      </span>
+                      <span className="text-xs text-blue-500 font-mono">
+                        {task.due_date && format(parseISO(task.due_date), 'HH:mm')}
+                      </span>
+                    </div>
                   </div>
+                  {/* KONIEC ZMIANY */}
+
                   <button 
                     onClick={() => deleteTask(task.id)}
                     className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity px-2"
@@ -175,8 +217,13 @@ export default function TasksPage() {
               value={date}
               locale="pl-PL"
               tileContent={({ date: tileDate }) => {
-                const hasTasks = tasks.some(t => t.due_date && isSameDay(parseISO(t.due_date), tileDate));
-                return hasTasks ? <div className="dot"></div> : null;
+                // Sprawdzamy czy są zadania, ale opcjonalnie można zmienić kolor kropki jeśli wszystkie są zrobione
+                const tasksInDay = tasks.filter(t => t.due_date && isSameDay(parseISO(t.due_date), tileDate));
+                if (tasksInDay.length === 0) return null;
+                
+                // (Opcjonalnie) Jeśli wszystkie zrobione, kropka może być szara
+                const allDone = tasksInDay.every(t => t.is_completed);
+                return <div className="dot" style={{ backgroundColor: allDone ? '#9ca3af' : '#10b981' }}></div>;
               }}
             />
           </div>
