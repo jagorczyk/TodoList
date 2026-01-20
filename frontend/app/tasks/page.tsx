@@ -118,7 +118,7 @@ export default function TasksPage() {
     <div className="min-h-screen bg-gray-50 text-gray-800 p-6">
       <header className="flex justify-between items-center mb-8 max-w-6xl mx-auto">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Harmonogram</h1>
+          <h1 className="text-3xl font-bold text-gray-900">TodoList</h1>
         </div>
         <button onClick={logout} className="text-sm text-red-500 hover:text-red-700 font-semibold border border-red-200 px-4 py-2 rounded hover:bg-red-50 transition">
           Wyloguj się
