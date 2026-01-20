@@ -5,10 +5,12 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 tasks_bp = Blueprint('tasks', __name__)
 
-@tasks_bp.route('/', methods=['GET'])
+# Pamiętaj o pustym stringu w route (dla problemu 308)
+@tasks_bp.route('', methods=['GET'])
 @jwt_required()
 def get_tasks():
-    current_user_id = get_jwt_identity()
+    # Pobieramy string "1" i rzutujemy na int 1
+    current_user_id = int(get_jwt_identity())
     tasks = Task.query.filter_by(user_id=current_user_id).all()
     
     output = []
@@ -20,10 +22,10 @@ def get_tasks():
         })
     return jsonify(output), 200
 
-@tasks_bp.route('/', methods=['POST'])
+@tasks_bp.route('', methods=['POST'])
 @jwt_required()
 def create_task():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
     data = request.get_json()
     
     if not data.get('title'):
@@ -42,7 +44,7 @@ def create_task():
 @tasks_bp.route('/<int:id>', methods=['DELETE'])
 @jwt_required()
 def delete_task(id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
     task = Task.query.filter_by(id=id, user_id=current_user_id).first()
     
     if not task:

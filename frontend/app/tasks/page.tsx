@@ -16,30 +16,44 @@ export default function TasksPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/');
-      return;
+    // Sprawdzenie czy kod działa po stronie klienta
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        router.push('/');
+        return;
+      }
+      fetchTasks(token);
     }
-    fetchTasks(token);
   }, [router]);
 
   const fetchTasks = async (token: string) => {
     try {
-      const res = await fetch('/api/tasks/', {
+      // Usunąłem ukośnik na końcu, żeby pasowało do backendu
+      const res = await fetch('/api/tasks', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
+      
       if (res.status === 401) {
         localStorage.removeItem('token');
         router.push('/');
         return;
       }
+
       const data = await res.json();
-      setTasks(data);
+      
+      // ZABEZPIECZENIE: Sprawdzamy, czy otrzymaliśmy tablicę
+      if (Array.isArray(data)) {
+        setTasks(data);
+      } else {
+        console.error("Otrzymano nieprawidłowe dane:", data);
+        setTasks([]); // Ustaw pustą listę w razie błędu
+      }
     } catch (err) {
       console.error(err);
+      setTasks([]);
     } finally {
       setLoading(false);
     }
@@ -50,18 +64,22 @@ export default function TasksPage() {
     const token = localStorage.getItem('token');
     if (!token || !newTask.trim()) return;
 
-    const res = await fetch('/api/tasks/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ title: newTask })
-    });
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ title: newTask })
+      });
 
-    if (res.ok) {
-      setNewTask('');
-      fetchTasks(token);
+      if (res.ok) {
+        setNewTask('');
+        fetchTasks(token);
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -69,13 +87,18 @@ export default function TasksPage() {
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    await fetch(`/api/tasks/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    setTasks(tasks.filter(t => t.id !== id));
+    try {
+      await fetch(`/api/tasks/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      // Aktualizacja lokalna dla szybkości
+      setTasks(currentTasks => currentTasks.filter(t => t.id !== id));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const logout = () => {
@@ -115,6 +138,7 @@ export default function TasksPage() {
         </form>
 
         <ul className="space-y-3">
+          {/* POPRAWKA: Renderowanie listy tylko gdy są zadania */}
           {tasks.map((task) => (
             <li key={task.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
               <span className="text-lg text-gray-800">{task.title}</span>
@@ -126,10 +150,12 @@ export default function TasksPage() {
               </button>
             </li>
           ))}
-          {tasks.length === 0 && (
-            <p className="text-center text-gray-500">Brak zadań. Dodaj coś!</p>
-          )}
         </ul>
+        
+        {/* POPRAWKA: Przeniesienie komunikatu poza <ul> */}
+        {tasks.length === 0 && (
+          <p className="text-center text-gray-500 mt-4">Brak zadań. Dodaj coś!</p>
+        )}
       </div>
     </div>
   );
