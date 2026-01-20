@@ -1,0 +1,51 @@
+services:
+  backend:
+    build: ./backend
+    container_name: flask_backend
+    command: python run.py
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - FLASK_DEBUG=1
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - JWT_SECRET_KEY=kluczJwt
+    depends_on:
+      - db
+    networks:
+      - app_network
+
+  frontend:
+    build: ./frontend
+    container_name: nextjs_frontend
+    command: npm run dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - BACKEND_URL=http://backend:5000 
+    depends_on:
+      - backend
+    networks:
+      - app_network
+
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    networks:
+      - app_network
+
+volumes:
+  postgres_data:
+
+networks:
+  app_network:
