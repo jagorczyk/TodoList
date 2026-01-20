@@ -14,7 +14,7 @@ A simple task management application.
 Follow these steps to run the project locally:
 
 1.  **Prerequisites**
-    Ensure you have Docker and Docker Compose installed on your machine.
+    Ensure you have Docker installed on your machine.
 
 2.  **Environment Configuration**
     Create a `.env` file in the main project directory and define the database credentials (required by the configuration in `docker-compose.yml`):
