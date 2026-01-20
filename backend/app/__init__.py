@@ -9,7 +9,7 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
-    app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'super-tajny-klucz-dev')
+    app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'jwtKlucz')
 
     CORS(app)
     db.init_app(app)

@@ -8,6 +8,5 @@ class Task(db.Model):
     title = db.Column(db.String(200), nullable=False)
     is_completed = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Klucz obcy do użytkownika
+    due_date = db.Column(db.DateTime, nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)

@@ -2,6 +2,7 @@ services:
   backend:
     build: ./backend
     container_name: flask_backend
+    restart: always
     command: python run.py
     ports:
       - "5000:5000"
