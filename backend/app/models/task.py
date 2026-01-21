@@ -1,7 +1,20 @@
 from app.extensions import db
 from datetime import datetime
+from typing import Optional
+
 
 class Task(db.Model):
+    """
+    Model reprezentujący pojedyncze zadanie (To-Do).
+
+    Attributes:
+        id (int): Unikalny identyfikator zadania.
+        title (str): Tytuł zadania.
+        is_completed (bool): Status wykonania zadania.
+        created_at (datetime): Data i czas utworzenia zadania.
+        due_date (datetime): Termin wykonania zadania (opcjonalny).
+        user_id (int): Klucz obcy wskazujący na właściciela zadania.
+    """
     __tablename__ = 'tasks'
 
     id = db.Column(db.Integer, primary_key=True)
