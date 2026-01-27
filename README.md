@@ -42,3 +42,7 @@ Follow these steps to run the project locally:
 * **backend/** - Source code for the Flask API server.
 * **frontend/** - Source code for the Next.js client application.
 * **docker-compose.yml** - Service orchestration file (frontend, backend, database).
+
+## Database Schema
+
+![ERD Diagram](./database_diagram.png)
