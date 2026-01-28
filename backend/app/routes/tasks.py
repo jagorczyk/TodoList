@@ -28,7 +28,12 @@ def get_tasks() -> Tuple[Response, int]:
             "id": task.id,
             "title": task.title,
             "is_completed": task.is_completed,
-            "due_date": task.due_date.isoformat() if task.due_date else None
+            "due_date": task.due_date.isoformat() if task.due_date else None,
+            "end_time": task.end_time.isoformat() if task.end_time else None,
+            "recurrence_type": task.recurrence_type,
+            "recurrence_interval": task.recurrence_interval,
+            "recurrence_end_date": task.recurrence_end_date.isoformat() if task.recurrence_end_date else None,
+            "parent_task_id": task.parent_task_id
         })
     return jsonify(output), 200
 
@@ -39,7 +44,8 @@ def create_task() -> Tuple[Response, int]:
     """
     Tworzy nowe zadanie dla zalogowanego użytkownika.
 
-    Wymaga podania 'title'. Opcjonalnie przyjmuje 'due_date'.
+    Wymaga podania 'title'. Opcjonalnie przyjmuje 'due_date', 'recurrence_type', 
+    'recurrence_interval', 'recurrence_end_date'.
 
     Returns:
         tuple: Komunikat sukcesu i ID zadania oraz kod 201.
@@ -58,16 +64,100 @@ def create_task() -> Tuple[Response, int]:
         except ValueError:
             pass
 
+    end_time: datetime | None = None
+    if data.get('end_time'):
+        try:
+            end_time = datetime.fromisoformat(
+                data['end_time'].replace('Z', '+00:00'))
+        except ValueError:
+            pass
+
+
+    recurrence_type = data.get('recurrence_type', 'none')
+    recurrence_interval = data.get('recurrence_interval', 1)
+    recurrence_end_date: datetime | None = None
+    
+    if data.get('recurrence_end_date'):
+        try:
+            recurrence_end_date = datetime.fromisoformat(
+                data['recurrence_end_date'].replace('Z', '+00:00'))
+        except ValueError:
+            pass
+
     new_task = Task(
         title=data['title'],
         user_id=current_user_id,
-        due_date=due_date
+        due_date=due_date,
+        end_time=end_time,
+        recurrence_type=recurrence_type,
+        recurrence_interval=recurrence_interval,
+        recurrence_end_date=recurrence_end_date
     )
 
     db.session.add(new_task)
     db.session.commit()
 
-    return jsonify({"msg": "Zadanie dodane", "id": new_task.id}), 201
+
+    if recurrence_type != 'none' and due_date:
+        created_tasks = generate_recurring_tasks(new_task, current_user_id)
+    
+    return jsonify({
+        "msg": "Zadanie dodane", 
+        "id": new_task.id,
+        "recurrence_type": new_task.recurrence_type
+    }), 201
+
+
+def generate_recurring_tasks(parent_task: Task, user_id: int, max_occurrences: int = 52) -> List[Task]:
+    """
+    Generuje zadania powtarzające się na podstawie zadania rodzica.
+    
+    Args:
+        parent_task: Zadanie rodzic z ustawioną powtarzalnością.
+        user_id: ID użytkownika.
+        max_occurrences: Maksymalna liczba wystąpień (domyślnie 52 - rok tygodni).
+    
+    Returns:
+        Lista utworzonych zadań potomnych.
+    """
+    created_tasks = []
+    current_date = parent_task.get_next_due_date()
+    count = 0
+    
+    while current_date and count < max_occurrences:
+        if parent_task.recurrence_end_date and current_date > parent_task.recurrence_end_date:
+            break
+        
+        child_end_time = None
+        if parent_task.end_time and parent_task.due_date:
+            time_diff = parent_task.end_time - parent_task.due_date
+            child_end_time = current_date + time_diff
+        
+        child_task = Task(
+            title=parent_task.title,
+            user_id=user_id,
+            due_date=current_date,
+            end_time=child_end_time,
+            recurrence_type=parent_task.recurrence_type,
+            recurrence_interval=parent_task.recurrence_interval,
+            recurrence_end_date=parent_task.recurrence_end_date,
+            parent_task_id=parent_task.id
+        )
+        
+        db.session.add(child_task)
+        created_tasks.append(child_task)
+        
+
+        temp_task = Task(
+            due_date=current_date,
+            recurrence_type=parent_task.recurrence_type,
+            recurrence_interval=parent_task.recurrence_interval
+        )
+        current_date = temp_task.get_next_due_date()
+        count += 1
+    
+    db.session.commit()
+    return created_tasks
 
 
 @tasks_bp.route('/<int:id>', methods=['DELETE'])

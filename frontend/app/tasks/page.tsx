@@ -12,13 +12,31 @@ interface Task {
   title: string;
   is_completed: boolean;
   due_date: string | null;
+  end_time: string | null;
+  recurrence_type?: string;
+  recurrence_interval?: number;
+  recurrence_end_date?: string | null;
+  parent_task_id?: number | null;
 }
+
+type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly' | 'custom';
+
+// Funkcja pomocnicza do obliczania czasu +1 godzina
+const addOneHour = (time: string): string => {
+  const [hours, minutes] = time.split(':').map(Number);
+  const newHours = (hours + 1) % 24;
+  return `${newHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [date, setDate] = useState<Date>(new Date());
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskTime, setNewTaskTime] = useState('12:00');
+  const [newTaskEndTime, setNewTaskEndTime] = useState('13:00');
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('none');
+  const [recurrenceInterval, setRecurrenceInterval] = useState(1);
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false); // Stan trybu ciemnego
   const router = useRouter();
@@ -37,7 +55,7 @@ export default function TasksPage() {
     // 2. Ładowanie motywu z pamięci lub ustawień systemu
     const savedTheme = localStorage.getItem('theme');
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
+
     if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
       setIsDarkMode(true);
       document.documentElement.classList.add('dark');
@@ -64,7 +82,7 @@ export default function TasksPage() {
       const res = await fetch('/api/tasks', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       if (res.status === 401) {
         localStorage.removeItem('token');
         router.push('/');
@@ -84,7 +102,7 @@ export default function TasksPage() {
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    setTasks(current => 
+    setTasks(current =>
       current.map(t => t.id === id ? { ...t, is_completed: !currentStatus } : t)
     );
 
@@ -109,7 +127,42 @@ export default function TasksPage() {
 
     const fullDate = new Date(date);
     const [hours, minutes] = newTaskTime.split(':').map(Number);
-    fullDate.setHours(hours, minutes);
+    fullDate.setHours(hours, minutes, 0, 0);
+
+    // Formatowanie daty bez konwersji do UTC
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const localISOString = `${fullDate.getFullYear()}-${pad(fullDate.getMonth() + 1)}-${pad(fullDate.getDate())}T${pad(fullDate.getHours())}:${pad(fullDate.getMinutes())}:00`;
+
+    const taskData: {
+      title: string;
+      due_date: string;
+      end_time?: string;
+      recurrence_type: string;
+      recurrence_interval?: number;
+      recurrence_end_date?: string;
+    } = {
+      title: newTaskTitle,
+      due_date: localISOString,
+      recurrence_type: recurrenceType
+    };
+
+
+    if (newTaskEndTime) {
+      const endDate = new Date(date);
+      const [endHours, endMinutes] = newTaskEndTime.split(':').map(Number);
+      endDate.setHours(endHours, endMinutes, 0, 0);
+      taskData.end_time = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00`;
+    }
+
+    if (recurrenceType === 'custom') {
+      taskData.recurrence_interval = recurrenceInterval;
+    }
+
+    if (recurrenceEndDate) {
+      const endDate = new Date(recurrenceEndDate);
+      const localEndDateISO = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}T23:59:00`;
+      taskData.recurrence_end_date = localEndDateISO;
+    }
 
     try {
       const res = await fetch('/api/tasks', {
@@ -118,14 +171,16 @@ export default function TasksPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ 
-          title: newTaskTitle,
-          due_date: fullDate.toISOString() 
-        })
+        body: JSON.stringify(taskData)
       });
 
       if (res.ok) {
         setNewTaskTitle('');
+        setNewTaskTime('12:00');
+        setNewTaskEndTime('13:00');
+        setRecurrenceType('none');
+        setRecurrenceInterval(1);
+        setRecurrenceEndDate('');
         fetchTasks(token);
       }
     } catch (err) {
@@ -166,15 +221,15 @@ export default function TasksPage() {
   return (
     // Główny kontener z obsługą trybu ciemnego (dark:bg-gray-900)
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-6 transition-colors duration-300">
-      
+
       <header className="flex justify-between items-center mb-8 max-w-6xl mx-auto">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">TodoList</h1>
         </div>
-        
+
         <div className="flex items-center gap-4">
           {/* PRZEŁĄCZNIK TRYBU */}
-          <button 
+          <button
             onClick={toggleTheme}
             className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition text-2xl"
             title={isDarkMode ? "Włącz tryb jasny" : "Włącz tryb ciemny"}
@@ -189,7 +244,7 @@ export default function TasksPage() {
       </header>
 
       <main className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
+
         {/* Kolumna listy zadań */}
         <div className="lg:col-span-4 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 h-fit transition-colors">
           <h2 className="text-xl font-bold mb-4 border-b dark:border-gray-700 pb-2 flex justify-between items-center text-gray-900 dark:text-white">
@@ -198,36 +253,46 @@ export default function TasksPage() {
               {tasksForSelectedDate.length} zadań
             </span>
           </h2>
-          
+
           <div className="space-y-3 min-h-50">
             {tasksForSelectedDate.length === 0 ? (
               <p className="text-gray-400 dark:text-gray-500 text-center py-8 italic">Brak planów na ten dzień.</p>
             ) : (
               tasksForSelectedDate.map(task => (
                 <div key={task.id} className="group flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-white dark:hover:bg-gray-700 border border-transparent hover:border-blue-100 dark:hover:border-blue-900 rounded-lg transition-all shadow-sm hover:shadow-md">
-                  
+
                   <div className="flex items-center gap-3">
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       checked={task.is_completed}
                       onChange={() => toggleTaskCompletion(task.id, task.is_completed)}
                       className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300 dark:border-gray-600 dark:bg-gray-600 cursor-pointer"
                     />
                     <div className="flex flex-col">
-                      <span className={`font-medium transition-colors ${
-                        task.is_completed 
-                          ? 'line-through text-gray-400 dark:text-gray-500' 
-                          : 'text-gray-800 dark:text-gray-200'
-                      }`}>
+                      <span className={`font-medium transition-colors flex items-center gap-1 ${task.is_completed
+                        ? 'line-through text-gray-400 dark:text-gray-500'
+                        : 'text-gray-800 dark:text-gray-200'
+                        }`}>
                         {task.title}
+                        {task.recurrence_type && task.recurrence_type !== 'none' && (
+                          <span className="text-blue-500 dark:text-blue-400 text-sm" title={
+                            task.recurrence_type === 'daily' ? 'Codziennie' :
+                              task.recurrence_type === 'weekly' ? 'Co tydzień' :
+                                task.recurrence_type === 'monthly' ? 'Co miesiąc' :
+                                  task.recurrence_type === 'custom' ? `Co ${task.recurrence_interval} dni` : ''
+                          }>
+                            🔄
+                          </span>
+                        )}
                       </span>
                       <span className="text-xs text-blue-500 dark:text-blue-400 font-mono">
                         {task.due_date && format(parseISO(task.due_date), 'HH:mm')}
+                        {task.end_time && ` - ${format(parseISO(task.end_time), 'HH:mm')}`}
                       </span>
                     </div>
                   </div>
 
-                  <button 
+                  <button
                     onClick={() => deleteTask(task.id)}
                     className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-500 transition-opacity px-2"
                   >
@@ -262,12 +327,12 @@ export default function TasksPage() {
               
               .dot { height: 6px; width: 6px; background-color: #10b981; border-radius: 50%; margin-top: 4px; }
             `}</style>
-            
-            <Calendar 
-              onChange={(v) => setDate(v as Date)} 
+
+            <Calendar
+              onChange={(v) => setDate(v as Date)}
               value={date}
               locale="pl-PL"
-              className={isDarkMode ? 'text-gray-200' : 'text-gray-800'} 
+              className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}
               tileContent={({ date: tileDate }) => {
                 const tasksInDay = tasks.filter(t => t.due_date && isSameDay(parseISO(t.due_date), tileDate));
                 if (tasksInDay.length === 0) return null;
@@ -292,23 +357,76 @@ export default function TasksPage() {
                 className="w-full p-3 rounded-lg bg-blue-700 dark:bg-blue-900 border border-blue-500 dark:border-blue-700 text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-white transition-colors"
               />
             </div>
-            
+
             <div>
-              <label className="block text-blue-100 text-xs uppercase font-bold mb-1">Godzina</label>
+              <label className="block text-blue-100 text-xs uppercase font-bold mb-1">Od której?</label>
               <input
                 type="time"
                 value={newTaskTime}
-                onChange={(e) => setNewTaskTime(e.target.value)}
+                onChange={(e) => {
+                  setNewTaskTime(e.target.value);
+                  setNewTaskEndTime(addOneHour(e.target.value));
+                }}
                 className="w-full p-3 rounded-lg bg-blue-700 dark:bg-blue-900 border border-blue-500 dark:border-blue-700 text-white focus:outline-none focus:ring-2 focus:ring-white transition-colors"
               />
             </div>
+
+            <div>
+              <label className="block text-blue-100 text-xs uppercase font-bold mb-1">Do której? (opcjonalnie)</label>
+              <input
+                type="time"
+                value={newTaskEndTime}
+                onChange={(e) => setNewTaskEndTime(e.target.value)}
+                className="w-full p-3 rounded-lg bg-blue-700 dark:bg-blue-900 border border-blue-500 dark:border-blue-700 text-white focus:outline-none focus:ring-2 focus:ring-white transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-blue-100 text-xs uppercase font-bold mb-1">Powtarzalność</label>
+              <select
+                value={recurrenceType}
+                onChange={(e) => setRecurrenceType(e.target.value as RecurrenceType)}
+                className="w-full p-3 rounded-lg bg-blue-700 dark:bg-blue-900 border border-blue-500 dark:border-blue-700 text-white focus:outline-none focus:ring-2 focus:ring-white transition-colors"
+              >
+                <option value="none">Brak</option>
+                <option value="daily">Codziennie</option>
+                <option value="weekly">Co tydzień</option>
+                <option value="monthly">Co miesiąc</option>
+                <option value="custom">Niestandardowa</option>
+              </select>
+            </div>
+
+            {recurrenceType === 'custom' && (
+              <div>
+                <label className="block text-blue-100 text-xs uppercase font-bold mb-1">Co ile dni?</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={recurrenceInterval}
+                  onChange={(e) => setRecurrenceInterval(parseInt(e.target.value) || 1)}
+                  className="w-full p-3 rounded-lg bg-blue-700 dark:bg-blue-900 border border-blue-500 dark:border-blue-700 text-white focus:outline-none focus:ring-2 focus:ring-white transition-colors"
+                />
+              </div>
+            )}
+
+            {recurrenceType !== 'none' && (
+              <div>
+                <label className="block text-blue-100 text-xs uppercase font-bold mb-1">Do kiedy? (opcjonalnie)</label>
+                <input
+                  type="date"
+                  value={recurrenceEndDate}
+                  onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                  className="w-full p-3 rounded-lg bg-blue-700 dark:bg-blue-900 border border-blue-500 dark:border-blue-700 text-white focus:outline-none focus:ring-2 focus:ring-white transition-colors"
+                />
+              </div>
+            )}
 
             <div className="pt-2">
               <p className="text-sm text-blue-200 mb-4">
                 Dla daty: <strong>{format(date, 'd MMMM yyyy', { locale: pl })}</strong>
               </p>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="w-full py-3 bg-white dark:bg-gray-200 text-blue-600 dark:text-blue-900 font-bold rounded-lg hover:bg-blue-50 dark:hover:bg-white transition shadow-md"
               >
                 Zaplanuj
